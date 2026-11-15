@@ -82,7 +82,12 @@ jobs:
           [[ "$CONTEXT" =~ ^(\.|[A-Za-z0-9_-][A-Za-z0-9._-]*)(/(\.|[A-Za-z0-9_-][A-Za-z0-9._-]*))*$ ]]
           [[ "$DOCKERFILE" =~ ^(\.|[A-Za-z0-9_-][A-Za-z0-9._-]*)(/(\.|[A-Za-z0-9_-][A-Za-z0-9._-]*))*$ ]]
           [[ -z "$TARGET" || "$TARGET" =~ ^[A-Za-z0-9._-]+$ ]]
-          [[ "$SMOKE_PATHS" =~ ^[A-Za-z0-9._~/%?=+,:@-]*$ ]]
+          # Space-separated path list: spaces separate entries; shell
+          # metacharacters (; $ ( ) backtick | & < > quotes newlines) stay
+          # rejected. Kept in a variable so shellcheck parses the regex as one
+          # word instead of splitting it at the literal space.
+          paths_re='^[A-Za-z0-9._~/%?=+,:@ -]*$'
+          [[ "$SMOKE_PATHS" =~ $paths_re ]]
 
       - name: Download build artifact
         if: inputs.artifact-name != ''
