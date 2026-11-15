@@ -22,8 +22,13 @@ on:
         required: false
         default: .nvmrc
         type: string
+      runs-on:
+        description: GitHub-hosted runner label for the verify job.
+        required: false
+        default: ubuntu-latest
+        type: string
       artifact-name:
-        description: Name of the uploaded build artifact.
+        description: Name of the uploaded build artifact (empty = no upload).
         required: false
         default: dist
         type: string
@@ -67,6 +72,20 @@ jobs:
     outputs:
       skipped: ${{ steps.check.outputs.skipped }}
     steps:
+      # The label lands in `runs-on` of the verify job, so it must be a plain
+      # GitHub-hosted label. The gate below runs before any checkout and never
+      # interpolates the value into the shell source (it comes from env).
+      - name: Validate runner label
+        shell: bash
+        env:
+          RUNS_ON: ${{ inputs.runs-on }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RUNS_ON" =~ ^(ubuntu|windows|macos)-[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::runs-on must be a GitHub-hosted label (ubuntu-*, windows-*, macos-*), got '${RUNS_ON}'"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,7 +112,7 @@ jobs:
     name: verify
     needs: guard
     if: needs.guard.outputs.skipped != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -150,6 +169,9 @@ jobs:
           done
 
       - name: Upload build artifact
+        # An empty name means the project has no build artifact to publish;
+        # it also keeps matrix variants from colliding on one artifact name.
+        if: inputs.artifact-name != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.artifact-name }}

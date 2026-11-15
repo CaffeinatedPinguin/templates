@@ -23,7 +23,8 @@ artifact.
 | `ref` | empty | Checkout ref, e.g. `refs/pull/<n>/head` to verify a PR head. |
 | `scripts` | `test lint typecheck build` | Space-separated `pnpm <script>` commands run in order. |
 | `node-version-file` | `.nvmrc` | File read by `actions/setup-node`; pnpm comes from `packageManager`. |
-| `artifact-name` | `dist` | Name of the uploaded artifact. |
+| `runs-on` | `ubuntu-latest` | GitHub-hosted runner label for the `verify` job (`ubuntu-*`, `windows-*`, `macos-*`); any other label is rejected. |
+| `artifact-name` | `dist` | Name of the uploaded artifact; an empty value skips the upload, which projects without a Docker build do not need. |
 | `artifact-path` | `dist` | Path to upload; multi-line values are allowed. |
 | `assets-name` | empty | Name of a second artifact carrying files for the GitHub release; empty uploads nothing extra. |
 | `assets-path` | empty | Release asset files or globs uploaded to `assets-name`; multi-line values are allowed. |
@@ -31,6 +32,22 @@ artifact.
 
 Output: `skipped` is `'true'` when a stable release tag already points at the
 pushed commit, so the expensive jobs are not repeated.
+
+To verify several operating systems, call the workflow once per matrix entry
+and give every variant a unique artifact name (or an empty one) so the uploads
+do not collide:
+
+```yaml
+jobs:
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    uses: CaffeinatedPinguin/templates/.github/workflows/node-ci.yml@<full-commit-sha>
+    with:
+      runs-on: ${{ matrix.os }}
+      artifact-name: dist-${{ matrix.os }}
+```
 
 ## `docker.yml`
 

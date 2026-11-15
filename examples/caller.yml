@@ -37,6 +37,9 @@ jobs:
       ref: ${{ github.event.inputs.pr && format('refs/pull/{0}/head', github.event.inputs.pr) || '' }}
       scripts: test lint typecheck build
       node-version-file: .nvmrc
+      # Optional: pick the runner label, e.g. from a matrix. An empty
+      # artifact-name skips the upload, so OS variants do not collide.
+      # runs-on: ubuntu-latest
       artifact-name: dist
       artifact-path: dist
       # Optional: a second artifact with files for the GitHub release (for
