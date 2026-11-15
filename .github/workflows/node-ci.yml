@@ -1,0 +1,169 @@
+name: node-ci
+
+# Reusable Node/pnpm verification workflow. A caller pins this file to a full
+# commit SHA and passes project-specific inputs. There is deliberately no
+# pull_request trigger: the repository owner starts a manual run for a PR head
+# through the `ref` input (for example refs/pull/12/head).
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to check out (empty = the event ref).
+        required: false
+        default: ""
+        type: string
+      scripts:
+        description: Space-separated pnpm scripts to run in order.
+        required: false
+        default: test lint typecheck build
+        type: string
+      node-version-file:
+        description: File that declares the Node version.
+        required: false
+        default: .nvmrc
+        type: string
+      artifact-name:
+        description: Name of the uploaded build artifact.
+        required: false
+        default: dist
+        type: string
+      artifact-path:
+        description: Path of the uploaded build artifact (multi-line allowed).
+        required: false
+        default: dist
+        type: string
+      assets-name:
+        description: Name of a second artifact for release assets (empty = none).
+        required: false
+        default: ""
+        type: string
+      assets-path:
+        description: Release asset files or globs (multi-line allowed).
+        required: false
+        default: ""
+        type: string
+      check-release-tag:
+        description: Validate a release tag against package.json on tag builds.
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      skipped:
+        description: "'true' when the release-tag guard skipped verification."
+        value: ${{ jobs.guard.outputs.skipped }}
+
+permissions: {}
+
+jobs:
+  # Cheap race guard: on a push to main a stable release tag may already point
+  # at this commit. The release pipeline is authoritative in that case, so the
+  # expensive verification is skipped. Full history is required to see tags.
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      skipped: ${{ steps.check.outputs.skipped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Skip when a stable release tag points at this commit
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          skipped=false
+          if [[ "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/main" ]]; then
+            tag="$(git tag --points-at "$GITHUB_SHA" --list 'v*' --sort=-version:refname \
+              | sed -n -E '/^v[0-9]+\.[0-9]+\.[0-9]+$/ {p;q;}')"
+            if [[ -n "$tag" ]]; then
+              echo "Stable release tag ${tag} already points at ${GITHUB_SHA}; the release pipeline is authoritative. Skipping."
+              skipped=true
+            fi
+          fi
+          echo "skipped=${skipped}" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: verify
+    needs: guard
+    if: needs.guard.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      # A reusable workflow cannot reference a local composite action of its
+      # own repository, so the pnpm and Node setup steps stay inline.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          # A manual PR run checks out untrusted code. Disable the store cache so
+          # such a run can never write a cache entry that trusted main/tag
+          # builds would later restore (cache poisoning).
+          cache: ${{ inputs.ref == '' }}
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate release tag against package.json
+        if: inputs.check-release-tag && github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          expected="v${version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected}" ]]; then
+            echo "::error::release tag ${GITHUB_REF_NAME} does not match package.json version ${version} (expected ${expected})"
+            exit 1
+          fi
+
+      - name: Run package scripts
+        shell: bash
+        env:
+          SCRIPTS: ${{ inputs.scripts }}
+        run: |
+          set -euo pipefail
+          read -r -a scripts <<< "$SCRIPTS" || true
+          for script in "${scripts[@]}"; do
+            echo "::group::pnpm ${script}"
+            pnpm "${script}"
+            echo "::endgroup::"
+          done
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 1
+
+      # Optional second artifact, kept apart from the build artifact so the
+      # Docker build layout stays intact; release.yml downloads it by name.
+      - name: Upload release assets
+        if: inputs.assets-name != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.assets-name }}
+          path: ${{ inputs.assets-path }}
+          if-no-files-found: error
+          retention-days: 1

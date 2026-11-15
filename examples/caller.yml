@@ -1,0 +1,82 @@
+# Copy this file into a project repository under .github/workflows/ and replace
+# every <full-commit-sha> with the commit SHA of the CaffeinatedPinguin/templates
+# release you want to pin to. The example is not part of .github/workflows in
+# this repository, so keep the input names in sync with the contracts manually.
+# The docker push and the release job only run for version tags; branch and
+# manual PR runs verify and smoke test without publishing.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to verify (checked out as refs/pull/<n>/head)
+        required: false
+        default: ""
+        type: string
+
+# Tag and branch runs share the SHA-based group: a release tag cancels the CI
+# run for the same commit, while CI never cancels an in-progress release.
+concurrency:
+  group: ci-${{ github.sha }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/') }}
+
+permissions: {}
+
+jobs:
+  verify:
+    name: verify
+    permissions:
+      contents: read
+    uses: CaffeinatedPinguin/templates/.github/workflows/node-ci.yml@<full-commit-sha>
+    with:
+      # A manual run can verify an untrusted PR head without a pull_request trigger.
+      ref: ${{ github.event.inputs.pr && format('refs/pull/{0}/head', github.event.inputs.pr) || '' }}
+      scripts: test lint typecheck build
+      node-version-file: .nvmrc
+      artifact-name: dist
+      artifact-path: dist
+      # Optional: a second artifact with files for the GitHub release (for
+      # example a browser addon zip). Keeping it separate from `dist` preserves
+      # the Docker build layout.
+      # assets-name: my-app-addon
+      # assets-path: build/my-app-addon.zip
+      check-release-tag: true
+
+  docker:
+    name: docker
+    needs: verify
+    permissions:
+      contents: read
+      packages: write
+    uses: CaffeinatedPinguin/templates/.github/workflows/docker.yml@<full-commit-sha>
+    with:
+      image-name: my-app
+      # Build the Dockerfile and dist from the same commit as verify.
+      ref: ${{ github.event.inputs.pr && format('refs/pull/{0}/head', github.event.inputs.pr) || '' }}
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-prebuild
+      artifact-name: dist
+      artifact-path: dist
+      smoke-paths: / /healthz
+      push: ${{ startsWith(github.ref, 'refs/tags/') }}
+
+  release:
+    name: release
+    needs: docker
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    uses: CaffeinatedPinguin/templates/.github/workflows/release.yml@<full-commit-sha>
+    with:
+      title-prefix: "my-app "
+      image-name: my-app
+      # Release assets: both inputs must point at the same artifact uploaded by
+      # node-ci.yml (`assets-name`); after download the files sit in the
+      # workspace root, which is what `assets-glob` matches.
+      # assets-artifact: my-app-addon
+      # assets-glob: build/my-app-addon.zip

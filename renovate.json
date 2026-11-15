@@ -1,0 +1,5 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["github-actions"],
+  "description": "Local manager selection; global policy lives in scheduler/config/renovate.json."
+}
