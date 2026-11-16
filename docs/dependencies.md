@@ -9,7 +9,8 @@ repository settings that switch it on are described in [baseline/README.md](../b
 
 - Version updates run monthly and are grouped: minor and patch upgrades arrive in one pull
   request.
-- Security updates start as soon as a vulnerability is published; they are not batched.
+- Security updates start as soon as a vulnerability is published and arrive together in one
+  grouped pull request per ecosystem, while each major update stays a separate pull request.
 - Dependabot pull requests that are not a major update merge themselves once `ci-required` is
   green. A major update stays open for a manual decision.
 
