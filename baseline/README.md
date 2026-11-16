@@ -1,71 +1,79 @@
 # gh-baseline
 
-One standard for every public GitHub repository: security, conventions and hygiene applied by a
-script, checked by a script. No servers, no schedulers, no paid services.
+One standard for every public repository: safe settings, shared files and simple CI.
+It needs no servers and no background jobs. You only need `gh` (logged in) and `bash`
+(Git Bash on Windows is enough).
 
-Requirements: `gh` (logged in as the owner, `gh auth login` with the `repo` and `workflow` scopes),
-`bash` (Git Bash on Windows is enough), `git`. Optional: `zizmor` for deeper workflow analysis.
+This kit is for repositories owned by one person, where only the owner and trusted
+collaborators merge changes. Apply it once, then rerun it whenever a repository drifts.
 
-## Contents
+## Quick start
 
-| Path | Purpose |
+1. In `config.env`, set `OWNER` and (optionally) the repository list.
+2. Preview the settings, then apply them:
+
+   ```bash
+   bin/apply.sh --dry-run   # prints every change, including labels it would delete
+   bin/apply.sh             # applies the settings through the GitHub API
+   ```
+
+3. In every repository, turn on **Collaborators only** under Settings -> Features -> Pull requests.
+4. Copy `repo-files/` into each repository through a pull request (steps in `AGENTS.md`),
+   then fill in `scripts/ci.sh` with the project commands.
+
+## What is in the kit
+
+| Path | What it is |
 |---|---|
-| `config.env` | the single file to edit: OWNER, repository list, switches |
-| `bin/apply.sh` | configures repositories through the API (idempotent, `--dry-run`) |
-| `bin/audit.sh` | checks compliance, changes nothing, non-zero exit on drift |
-| `bin/sync-files.sh` | brings the standard files into a clone through a PR (never push to main) |
-| `bin/pin-actions.sh` | pins `uses:` to full SHAs (required by the Actions settings); resolves `LATEST` |
-| `bin/lint-workflows.sh` | static workflow checks: forbidden triggers, injections, missing pins |
-| `rulesets/*.json` | protection for `main`, `v*` tags and the branch-name pattern |
-| `labels.tsv` | the only allowed labels |
-| `dot-github/` | contents of `OWNER/.github`: default issue forms, PR template, SECURITY, CONTRIBUTING |
-| `repo-files/` | per-repository files: `pr-labels.yml`, `stale.yml`, README template |
-| `hooks/commit-msg` | local Conventional Commits guard |
-| `review/` | ad-hoc, cheap AI review of PRs |
+| `config.env` | your login and the optional repository list |
+| `bin/apply.sh` | configures every repository; `--dry-run` only prints |
+| `ruleset-main.json` | protection for the `main` branch |
+| `labels.tsv` | the only four labels that stay |
+| `repo-files/` | files copied into every repository, including `SECURITY.md`, `CONTRIBUTING.md`, issue forms and the PR template |
+| `bin/pin-actions.sh` | replaces `@LATEST` in workflows with a full commit SHA |
+| `AGENTS.md` | instructions for your AI agent |
 
-`repo-files/.github/workflows/stale.yml` keeps `actions/stale@LATEST` on purpose.
-`bin/sync-files.sh` runs `bin/pin-actions.sh` on the target workflows, which resolves `LATEST` to the
-newest release and pins it to a full commit SHA.
+## What each setting does
 
-## First run (pilot, about 30 minutes)
+- **Squash-only merge.** A pull request becomes exactly one commit on `main`, and that commit
+  uses the PR title and body, so history stays readable.
+- **One `main` ruleset.** Changes arrive only through a pull request with a green `ci-required`
+  check. Force pushes and branch deletion are blocked.
+- **`ci-required`.** Every repository runs one required job with this exact name. The shared
+  `repo-files/.github/workflows/ci.yml` provides it.
+- **Action allowlist.** Workflows may use GitHub-owned actions. `ACTION_PATTERNS` in `config.env`
+  is the only exception: it lists third-party actions and shared workflows that may also run, for
+  example `pnpm/action-setup@*` or `OWNER/templates/.github/workflows/node-ci.yml@*`.
+  Every entry is pinned to a full SHA so a moved tag cannot swap the code under you.
+- **Four labels.** `bug`, `enhancement`, `needs-info` and `dependencies`. Every other label is
+  removed. The dry run names each one before anything happens.
 
-```bash
-# 0. Sign in and configure the kit
-gh auth login
-$EDITOR config.env                         # OWNER=..., optionally REPOS=(...)
-
-# 1. Global community health files (once per account)
-gh repo create .github --public --clone && cp -r dot-github/. .github/
-cd .github && git add -A && git commit -m "docs: add default community health files" && git push && cd ..
-
-# 2. Audit, preview and apply repository settings
-bin/audit.sh
-bin/apply.sh --dry-run                     # review the list of changes
-bin/apply.sh                               # apply
-
-# 3. Manual settings (no API)
-#    Settings -> General -> Features -> Pull requests: "Collaborators only" (issues stay open)
-#    Settings -> Releases -> Enable release immutability
-
-# 4. Add the standard files through a PR, never by pushing to main
-bin/sync-files.sh ../project-a --no-pr     # creates the branch and commit locally
-# open the PR, wait for ci-required to be green, then merge (squash only)
-
-# 5. Stage the main ruleset after the first PR is merged
-#    set MAIN_RULESET=1 in config.env, then:
-bin/apply.sh project-a
-bin/audit.sh
-```
-
-## New repository
+## Add a new repository
 
 ```bash
 gh repo create name --public --clone --license mit
-bin/apply.sh name && bin/sync-files.sh ./name --auto-merge && bin/audit.sh name
 ```
 
-## When something must be bypassed
+Then run the Quick start steps for that repository: settings with `bin/apply.sh`, the manual
+**Collaborators only** switch, and `repo-files/` through a pull request.
 
-The ruleset has no bypass, not even for you - on purpose. In an emergency: Settings -> Rules ->
-`baseline-main` -> Enforcement: Disabled, fix the problem, turn it back on (or run
-`bin/apply.sh name`). `bin/audit.sh` reports it if you forget.
+## Node and pnpm projects
+
+These projects do not copy `repo-files/.github/workflows/ci.yml`. They use the thin caller in
+`examples/caller.yml` instead: it calls the shared reusable workflows and adds a `ci-required`
+aggregator job, so the required check keeps its name.
+
+## Dependabot
+
+Dependency updates are handled by Dependabot. The kit ships `dependabot.yml` (monthly version
+updates, grouped minor and patch) and `dependabot-auto-merge.yml`. Dependabot alerts and security
+updates are enabled by `bin/apply.sh`.
+
+Dependabot PRs except major updates merge themselves once `ci-required` is green. Major updates
+stay open for a manual decision.
+
+## When something goes wrong
+
+`bin/apply.sh` is idempotent: run it again to fix drifted settings. Run `--dry-run` first and read
+the output, especially the labels it would delete. Files already copied into a repository are not
+overwritten by `cp -rn`; update them through a pull request.

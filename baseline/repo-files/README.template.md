@@ -40,10 +40,10 @@
 
 ```sh
 git clone https://github.com/OWNER/PROJECT_NAME && cd PROJECT_NAME
-# run lint, typecheck, tests and build the same way CI does
+./scripts/ci.sh   # lint, typecheck, test, build – same as CI
 ```
 
-Conventions (branches, commits, releases): [CONTRIBUTING.md](https://github.com/OWNER/.github/blob/main/CONTRIBUTING.md).
+Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Support
 
@@ -51,7 +51,7 @@ Bug reports and feature requests: [open an issue](https://github.com/OWNER/PROJE
 
 ## Security
 
-Report vulnerabilities privately – see [SECURITY.md](https://github.com/OWNER/.github/blob/main/SECURITY.md). Do not open public issues for security problems.
+Report vulnerabilities privately – see [SECURITY.md](SECURITY.md). Do not open public issues for security problems.
 
 ## License
 
