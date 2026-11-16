@@ -33,7 +33,6 @@ collaborators merge changes. Apply it once, then rerun it whenever a repository 
 | `dot-github/` | contents of the shared `OWNER/.github` repository |
 | `repo-files/` | files copied into every repository |
 | `bin/pin-actions.sh` | replaces `@LATEST` in workflows with a full commit SHA |
-| `review/review.sh` | on-demand AI review of a pull request |
 | `AGENTS.md` | instructions for your AI agent |
 
 ## What each setting does
