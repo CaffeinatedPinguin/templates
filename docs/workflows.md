@@ -1,0 +1,97 @@
+# Workflows
+
+Read this when: you need to know what a shared workflow does, or which input and output to pass.
+
+This repository has five reusable workflows under `.github/workflows/`. A project calls one with
+`uses:` and a full commit SHA; [use in a project](use-in-a-project.md) shows the caller. Each
+section below lists the inputs with their defaults and the outputs. The file `check.yml` is not
+reusable: it runs `tools/check.sh` on this repository.
+
+## `node-ci.yml`
+
+Installs Node and pnpm, runs the requested `pnpm` scripts in order, and uploads the build
+artifact. A cheap guard skips the expensive jobs when a release tag already points at this
+commit.
+
+| Input | Default | What it does |
+|---|---|---|
+| `ref` | empty | Ref to check out, for example `refs/pull/<n>/head` to verify a pull request head. |
+| `scripts` | `test lint typecheck build` | Space-separated `pnpm <script>` commands run in order. |
+| `node-version-file` | `.nvmrc` | File read by `actions/setup-node`; pnpm comes from `packageManager`. |
+| `runs-on` | `ubuntu-latest` | GitHub-hosted runner label (`ubuntu-*`, `windows-*`, `macos-*`); other labels are rejected. |
+| `artifact-name` | `dist` | Uploaded artifact name; an empty value skips the upload. |
+| `artifact-path` | `dist` | Path to upload; multi-line values are allowed. |
+| `assets-name` | empty | Second artifact holding release files; empty uploads nothing extra. |
+| `assets-path` | empty | Release asset files or globs uploaded to `assets-name`; multi-line values are allowed. |
+| `check-release-tag` | `true` | On a tag, require it to equal `v` plus the `package.json` version. |
+
+| Output | What it does |
+|---|---|
+| `skipped` | `'true'` when a stable release tag already points at the pushed commit, so the expensive jobs are not repeated. |
+
+To verify several operating systems, call the workflow once per matrix entry and give every
+variant a unique artifact name (or an empty one) so the uploads do not collide:
+
+```yaml
+jobs:
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    uses: CaffeinatedPinguin/templates/.github/workflows/node-ci.yml@<full-commit-sha>
+    with:
+      runs-on: ${{ matrix.os }}
+      artifact-name: dist-${{ matrix.os }}
+```
+
+## `docker.yml`
+
+Builds an image with buildx, starts it and probes `/healthz`, then optionally publishes it to
+GHCR. Publishing is a separate job, so only that job gets write access.
+
+| Input | Default | What it does |
+|---|---|---|
+| `image-name` | required | Lowercase image name; must match `^[a-z0-9][a-z0-9._-]{0,127}$`. |
+| `context` | `.` | Build context. |
+| `dockerfile` | `Dockerfile` | Dockerfile path. |
+| `target` | empty | Optional build stage. |
+| `artifact-name` | empty | Artifact to download into `artifact-path`; empty downloads nothing. |
+| `artifact-path` | `dist` | Destination for the downloaded artifact. |
+| `smoke-paths` | `/` | Space-separated paths probed through `/healthz`. |
+| `push` | `false` | Publish `:<vX.Y.Z>` and `:stable` to GHCR; only a version tag may push. |
+| `ref` | empty | Checkout ref for the build, for example `refs/pull/<n>/head` for a manual pull request run; the push job ignores it. |
+
+## `release.yml`
+
+Creates a GitHub release from generated notes and optional assets. Run it only for a `vX.Y.Z`
+tag.
+
+| Input | Default | What it does |
+|---|---|---|
+| `title-prefix` | empty | Prefix for the release title. |
+| `image-name` | empty | Image shown in the notes; empty omits the Docker section. |
+| `assets-artifact` | empty | Artifact downloaded into the workspace; empty means no assets. |
+| `assets-glob` | empty | Files passed to `gh release create`; after the download they sit in the workspace root. |
+
+Use a separate artifact for assets (for example `assets-name` from `node-ci.yml`) so the build
+artifact layout is untouched.
+
+## `conventions.yml`
+
+Checks the pull request title and takes no inputs and no secrets. The caller runs it on
+`pull_request` with `permissions: {}`.
+
+- The title must look like a Conventional Commit subject (`type(scope): description`, optional
+  `!`, no dot at the end) or start with `Revert "`.
+- Pull requests from `dependabot[bot]` are exempt.
+- An empty title (a run without a pull request) skips the check.
+- Branch names and pull request text are not checked.
+
+## `dependency-review.yml`
+
+Runs `actions/dependency-review-action` on the pull request diff. The job needs `contents: read`
+only.
+
+| Input | Default | What it does |
+|---|---|---|
+| `fail-on-severity` | `high` | Minimum vulnerability severity that fails the review. |
