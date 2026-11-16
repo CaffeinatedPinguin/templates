@@ -31,15 +31,13 @@ There is no bug bounty.
 
 ## What to expect
 
-This project is maintained by one person in their spare time, so timelines are best effort:
+This project is maintained by one person in their spare time. Reports are read when time allows.
 
-| Step | Target |
-|---|---|
-| Acknowledgement | within 7 days |
-| Assessment (accepted / declined) | within 14 days |
-| Fix and release for confirmed issues | depends on severity; critical issues first |
+There is no guaranteed response time, no guaranteed acknowledgement and no guaranteed fix. Critical
+issues go first. Accepted reports are fixed in a new release and published as a GitHub Security
+Advisory (with a CVE when applicable). Reporters are credited unless they prefer otherwise.
 
-Accepted reports are fixed in a new release and published as a GitHub Security Advisory (with a CVE when applicable). Reporters are credited unless they prefer otherwise. Please give us a reasonable time to release a fix before any public disclosure (coordinated disclosure, 90 days by default).
+Please allow time for a fix to be released before any public disclosure.
 
 ## How this project protects its users
 
@@ -47,5 +45,5 @@ Accepted reports are fixed in a new release and published as a GitHub Security A
 - Secret scanning with push protection, Dependabot alerts and security updates, and CodeQL code scanning are enabled.
 - GitHub Actions run with a read-only token by default. GitHub-owned actions are allowed, together with a short allowlist of third-party actions and shared workflows from the `templates` repository; every one of them is pinned to a full commit SHA.
 - Pull requests from outside contributors are not accepted and no workflow reacts to issue or comment events, so untrusted input never runs in CI.
-- Dependency updates are handled by Renovate; Dependabot provides alerts and security updates.
+- Dependabot alerts and security updates are enabled; Dependabot handles dependency version updates.
 - Releases are immutable: published tags and assets cannot be changed or replaced.

@@ -20,6 +20,7 @@ Domain: ../../ai/domains/devops/AGENTS.md (generic rules; this file adds only lo
 - If a repository already has its own `ci.yml`, do not overwrite it: keep the `pull_request`
   trigger and a job named exactly `ci-required` (`needs:` on a reusable workflow is allowed in a caller).
 - Node/pnpm projects use `examples/caller.yml` instead of `repo-files/.github/workflows/ci.yml`.
+- Dependency updates come from Dependabot (`repo-files/.github/dependabot.yml`); PRs except major merge after a green `ci-required`.
 - Workflows: only `actions/*` and `github/*` actions plus the `ACTION_PATTERNS` allowlist from
   `config.env`, all pinned by `bin/pin-actions.sh`. Forbidden: `pull_request_target`, `workflow_run`,
   `issue_comment`, self-hosted runners, `${{ github.event.* }}` directly in `run:` (use `env:`), secrets in PR CI.

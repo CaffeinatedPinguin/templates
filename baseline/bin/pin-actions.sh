@@ -2,7 +2,7 @@
 # Pins every "uses: owner/repo@ref" to a full commit SHA:
 #   uses: actions/checkout@<40-char sha> # v5.0.0
 # A ref of "LATEST" means the newest release of the action. Lines that are already
-# pinned are skipped (Renovate updates them later, keeping the version comment).
+# pinned are skipped (Dependabot updates them later, keeping the version comment).
 #   bin/pin-actions.sh .github/workflows/*.yml
 set -euo pipefail
 command -v gh >/dev/null || { echo "gh not found" >&2; exit 1; }
