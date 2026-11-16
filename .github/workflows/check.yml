@@ -1,8 +1,11 @@
 name: check
 
+# Pull requests are collaborators only and pull request runs get no secret values.
 on:
   push:
     branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -18,3 +21,36 @@ jobs:
           persist-credentials: false
       - name: Run local checks
         run: bash tools/check.sh
+
+  conventions:
+    name: conventions
+    if: github.event_name == 'pull_request'
+    permissions: {}
+    uses: ./.github/workflows/conventions.yml
+
+  dependency-review:
+    name: dependency-review
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/dependency-review.yml
+    with:
+      fail-on-severity: high
+
+  # The baseline required check. It passes for skipped jobs and fails when any
+  # needed job failed or was cancelled.
+  ci-required:
+    name: ci-required
+    if: always()
+    needs: [check, conventions, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: All jobs green
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            [[ "$r" == success || "$r" == skipped ]] || { echo "::error::job result: $r"; exit 1; }
+          done
