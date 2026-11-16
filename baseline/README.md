@@ -1,71 +1,40 @@
-# gh-baseline
+# gh-baseline (v2, simplified)
 
-One standard for every public GitHub repository: security, conventions and hygiene applied by a
-script, checked by a script. No servers, no schedulers, no paid services.
-
-Requirements: `gh` (logged in as the owner, `gh auth login` with the `repo` and `workflow` scopes),
-`bash` (Git Bash on Windows is enough), `git`. Optional: `zizmor` for deeper workflow analysis.
-
-## Contents
+One standard for every public repository: safe settings, shared files, simple CI.
+No servers, no schedulers. Requires `gh` (logged in) and `bash` (Git Bash on Windows is enough).
 
 | Path | Purpose |
 |---|---|
-| `config.env` | the single file to edit: OWNER, repository list, switches |
-| `bin/apply.sh` | configures repositories through the API (idempotent, `--dry-run`) |
-| `bin/audit.sh` | checks compliance, changes nothing, non-zero exit on drift |
-| `bin/sync-files.sh` | brings the standard files into a clone through a PR (never push to main) |
-| `bin/pin-actions.sh` | pins `uses:` to full SHAs (required by the Actions settings); resolves `LATEST` |
-| `bin/lint-workflows.sh` | static workflow checks: forbidden triggers, injections, missing pins |
-| `rulesets/*.json` | protection for `main`, `v*` tags and the branch-name pattern |
+| `config.env` | your login and (optionally) the repository list |
+| `bin/apply.sh` | configures every repository through the API; `--dry-run` only prints |
+| `ruleset-main.json` | the `main` protection ruleset |
 | `labels.tsv` | the only allowed labels |
-| `dot-github/` | contents of `OWNER/.github`: default issue forms, PR template, SECURITY, CONTRIBUTING |
-| `repo-files/` | per-repository files: `pr-labels.yml`, `stale.yml`, README template |
-| `hooks/commit-msg` | local Conventional Commits guard |
-| `review/` | ad-hoc, cheap AI review of PRs |
+| `dot-github/` | contents of the `OWNER/.github` repository: SECURITY, CONTRIBUTING, issue forms, PR template |
+| `repo-files/` | files for every repository: `ci.yml`, `stale.yml`, `scripts/ci.sh`, README template |
+| `bin/pin-actions.sh` | resolves `@LATEST` in workflows to a full SHA (required) |
+| `review/review.sh` | on-demand AI review of a pull request |
+| `AGENTS.md` | instructions for your AI agent |
 
-`repo-files/.github/workflows/stale.yml` keeps `actions/stale@LATEST` on purpose.
-`bin/sync-files.sh` runs `bin/pin-actions.sh` on the target workflows, which resolves `LATEST` to the
-newest release and pins it to a full commit SHA.
+## Action allowlist
 
-## First run (pilot, about 30 minutes)
+`bin/apply.sh` allows GitHub-owned actions by default. `ACTION_PATTERNS` in `config.env` is the only
+exception: it lists the third-party actions and shared workflows that may also run (for example
+`pnpm/action-setup@*` or `OWNER/templates/.github/workflows/node-ci.yml@*`). Every pattern must be
+pinned to a full SHA by `bin/pin-actions.sh`. An empty or missing array means an empty allowlist.
 
-```bash
-# 0. Sign in and configure the kit
-gh auth login
-$EDITOR config.env                         # OWNER=..., optionally REPOS=(...)
+Node/pnpm projects use the thin caller in `examples/caller.yml` (reusable workflows plus a
+`ci-required` aggregator job) instead of `repo-files/.github/workflows/ci.yml`.
 
-# 1. Global community health files (once per account)
-gh repo create .github --public --clone && cp -r dot-github/. .github/
-cd .github && git add -A && git commit -m "docs: add default community health files" && git push && cd ..
+Dependency updates are handled by Renovate (configured outside the repositories), so the kit does not
+ship `dependabot.yml`; Dependabot still provides alerts and security updates.
 
-# 2. Audit, preview and apply repository settings
-bin/audit.sh
-bin/apply.sh --dry-run                     # review the list of changes
-bin/apply.sh                               # apply
+## Deployment
 
-# 3. Manual settings (no API)
-#    Settings -> General -> Features -> Pull requests: "Collaborators only" (issues stay open)
-#    Settings -> Releases -> Enable release immutability
+1. `config.env`: set `OWNER`.
+2. `OWNER/.github`: `gh repo create .github --public --clone`, copy `dot-github/` into it, commit, push.
+3. `bin/apply.sh --dry-run`, review the output (especially the labels it would delete), then `bin/apply.sh`.
+4. In every repository, manually: Settings -> Features -> Pull requests -> **Collaborators only**.
+5. Copy `repo-files/` into every repository through a PR (steps in `AGENTS.md`), then fill in `scripts/ci.sh`.
 
-# 4. Add the standard files through a PR, never by pushing to main
-bin/sync-files.sh ../project-a --no-pr     # creates the branch and commit locally
-# open the PR, wait for ci-required to be green, then merge (squash only)
-
-# 5. Stage the main ruleset after the first PR is merged
-#    set MAIN_RULESET=1 in config.env, then:
-bin/apply.sh project-a
-bin/audit.sh
-```
-
-## New repository
-
-```bash
-gh repo create name --public --clone --license mit
-bin/apply.sh name && bin/sync-files.sh ./name --auto-merge && bin/audit.sh name
-```
-
-## When something must be bypassed
-
-The ruleset has no bypass, not even for you - on purpose. In an emergency: Settings -> Rules ->
-`baseline-main` -> Enforcement: Disabled, fix the problem, turn it back on (or run
-`bin/apply.sh name`). `bin/audit.sh` reports it if you forget.
+New repository: `gh repo create name --public --clone --license mit`, then steps 3-5.
+Something drifted? Run `bin/apply.sh` again.

@@ -48,3 +48,4 @@ Accepted reports are fixed in a new release and published as a GitHub Security A
 - GitHub Actions run with a read-only token by default. GitHub-owned actions are allowed, together with a short allowlist of third-party actions and shared workflows from the `templates` repository; every one of them is pinned to a full commit SHA.
 - Pull requests from outside contributors are not accepted and no workflow reacts to issue or comment events, so untrusted input never runs in CI.
 - Dependency updates are handled by Renovate; Dependabot provides alerts and security updates.
+- Releases are immutable: published tags and assets cannot be changed or replaced.

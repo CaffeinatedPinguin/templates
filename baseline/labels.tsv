@@ -1,9 +1,5 @@
 # name	color	description
-bug	d73a4a	Something is broken (release notes: Fixes)
-enhancement	a2eeef	New feature or improvement (release notes: Features)
-docs	0075ca	Documentation only
-breaking	b60205	Breaking change (major)
-security	ee0701	Security fix
-dependencies	0366d6	Dependency update (Dependabot)
-skip-changelog	cfd3d7	Do not show in release notes
-needs-info	fbca04	Waiting for information from the reporter (auto-close after 14 days)
+bug	d73a4a	Something is broken
+enhancement	a2eeef	New feature or improvement
+needs-info	fbca04	Waiting for information (auto-closed after 14 days)
+dependencies	0366d6	Dependency update
