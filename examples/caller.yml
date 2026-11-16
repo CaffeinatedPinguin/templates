@@ -10,6 +10,9 @@ on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
+  # PR runs never receive secrets; every job keeps read-only permissions.
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       pr:
@@ -83,3 +86,36 @@ jobs:
       # workspace root, which is what `assets-glob` matches.
       # assets-artifact: my-app-addon
       # assets-glob: build/my-app-addon.zip
+
+  conventions:
+    name: conventions
+    if: github.event_name == 'pull_request'
+    permissions: {}
+    uses: CaffeinatedPinguin/templates/.github/workflows/conventions.yml@<full-commit-sha>
+
+  dependency-review:
+    name: dependency-review
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: CaffeinatedPinguin/templates/.github/workflows/dependency-review.yml@<full-commit-sha>
+    with:
+      fail-on-severity: high
+
+  # The baseline required check. It never fails the run itself for a skipped
+  # job, but fails when any needed job failed or was cancelled.
+  ci-required:
+    name: ci-required
+    if: always()
+    needs: [verify, docker, release, conventions, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: All jobs green
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            [[ "$r" == success || "$r" == skipped ]] || { echo "::error::job result: $r"; exit 1; }
+          done

@@ -4,6 +4,9 @@ Reusable GitHub Actions workflows for the workspace projects. A project keeps a
 small caller workflow and delegates the shared jobs to this repository, pinned
 to a full commit SHA. Renovate keeps the SHA current.
 
+The companion `baseline/` kit (rulesets, labels, and repo files) is described in
+[baseline/README.md](baseline/README.md).
+
 ## Usage
 
 1. Copy `examples/caller.yml` to `.github/workflows/ci.yml` in your project.
@@ -77,12 +80,58 @@ Creates a GitHub release from generated notes.
 | `assets-artifact` | empty | Artifact downloaded into the workspace; empty means no assets. Use a separate artifact (e.g. `node-ci.yml` `assets-name`) so the build artifact layout is untouched. |
 | `assets-glob` | empty | Files passed to `gh release create`; after the download they sit in the workspace root. |
 
+## `conventions.yml`
+
+Validates the pull request title and branch name. The workflow takes no inputs
+and no secrets; a caller runs it on `pull_request` and grants nothing
+(`permissions: {}`).
+
+- The title must be a Conventional Commit subject (`type(scope): description`,
+  optional `!`, no trailing dot) or `Revert "<subject>"`, at most 100 characters.
+- The branch must match `type/<slug>` (or `type/<issue>-<slug>`),
+  `dependabot/...`, or `renovate/...`.
+- A `feat`/`fix` title without a `Closes`/`Fixes`/`Resolves`/`Refs #N`
+  reference in the body emits a warning only.
+- An empty title (a non-`pull_request` run) skips validation.
+
+## `dependency-review.yml`
+
+Runs `actions/dependency-review-action` on the pull request diff. The job needs
+`contents: read` only.
+
+| Input | Default | Description |
+|---|---|---|
+| `fail-on-severity` | `high` | Minimum vulnerability severity that fails the review. |
+
 ## Security model
 
-- No workflow uses `pull_request`, `pull_request_target`, or `issue_comment`.
-  Start a PR run manually through the `workflow_dispatch` trigger with
+- Reusable workflows never declare a `pull_request`, `pull_request_target`, or
+  `issue_comment` trigger. Callers may use `pull_request` (repository PRs are
+  "Collaborators only") but never pass secrets to PR runs. A manual PR
+  verification can still use the `workflow_dispatch` trigger with
   `gh workflow run ci.yml -f pr=<n>`; it checks out `refs/pull/<n>/head` without
   granting write permissions to the PR.
+- The baseline required check is a job named exactly `ci-required` in the
+  caller: `if: always()`, `needs` listing every job, and a step that treats each
+  `needs.*.result` as passing only when it is `success` or `skipped`. A caller
+  exposes it like this:
+
+  ```yaml
+  ci-required:
+    if: always()
+    needs: [verify, docker, release, conventions, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: All jobs green
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            [[ "$r" == success || "$r" == skipped ]] || { echo "::error::job result: $r"; exit 1; }
+          done
+  ```
 - Only the owner pushes to `main` and `v*` tags. Recommended branch ruleset:
   block force pushes and deletions for `main` and `v*`.
 - `docker.yml` publishes only for a `vX.Y.Z` tag; any other ref fails before

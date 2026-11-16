@@ -15,7 +15,7 @@ This project belongs to the `devops` domain. Follow `../ai/devops/AGENTS.md`.
 - Prefer small composite actions for shared logic and reusable workflows for shared jobs.
 - Callers reference this repository by full commit SHA; Renovate keeps the SHA up to date.
 - Preserve compatibility unless a breaking change is deliberate and documented.
-- Follow the security model in `README.md`: minimal `permissions`, `persist-credentials: false` on every checkout, no PR triggers, no `secrets: inherit`, and `timeout-minutes` on every job.
+- Follow the security model in `README.md`: minimal `permissions`, `persist-credentials: false` on every checkout, no PR triggers in reusable workflows; callers may use `pull_request` without secrets, no `secrets: inherit`, and `timeout-minutes` on every job.
 
 ## Verify
 
@@ -27,4 +27,5 @@ This project belongs to the `devops` domain. Follow `../ai/devops/AGENTS.md`.
 
 - `../ai/devops/AGENTS.md`
 - `README.md`
+- `baseline/README.md`
 - The workflow or action being changed
