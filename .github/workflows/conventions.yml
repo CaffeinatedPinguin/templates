@@ -30,8 +30,8 @@ jobs:
             echo "No pull request context; skipping convention checks."
             exit 0
           fi
-          # Dependency bots set their own titles, so they are exempt.
-          if [[ "$AUTHOR" == 'dependabot[bot]' || "$AUTHOR" == 'renovate[bot]' ]]; then
+          # Dependabot sets its own titles, so its pull requests are exempt.
+          if [[ "$AUTHOR" == 'dependabot[bot]' ]]; then
             echo "PR author $AUTHOR is exempt; skipping convention checks."
             exit 0
           fi

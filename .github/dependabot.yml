@@ -1,0 +1,20 @@
+# Keep dependency noise low: one grouped pull request per month for minor and
+# patch updates, while each major update arrives separately. Security updates
+# still come immediately, regardless of this schedule.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: ci
+    open-pull-requests-limit: 3

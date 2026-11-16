@@ -11,9 +11,9 @@ This project belongs to the `devops` domain. Follow `../ai/devops/AGENTS.md`.
 ## Local rules
 
 - Reusable workflows and actions are public contracts. Keep inputs, outputs, permissions, and migration notes documented in `README.md`.
-- Pin every `uses:` to a full commit SHA with a `# vX.Y.Z` comment. Renovate bumps these SHAs.
+- Pin every `uses:` to a full commit SHA with a `# vX.Y.Z` comment. Dependabot bumps these SHAs.
 - Prefer small composite actions for shared logic and reusable workflows for shared jobs.
-- Callers reference this repository by full commit SHA; Renovate keeps the SHA up to date.
+- Callers reference this repository by full commit SHA; Dependabot keeps the SHA up to date.
 - Preserve compatibility unless a breaking change is deliberate and documented.
 - Follow the security model in `README.md`: minimal `permissions`, `persist-credentials: false` on every checkout, no PR triggers in reusable workflows; callers may use `pull_request` without secrets, no `secrets: inherit`, and `timeout-minutes` on every job.
 
