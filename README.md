@@ -82,17 +82,14 @@ Creates a GitHub release from generated notes.
 
 ## `conventions.yml`
 
-Validates the pull request title and branch name. The workflow takes no inputs
-and no secrets; a caller runs it on `pull_request` and grants nothing
-(`permissions: {}`).
+Validates the pull request title. The workflow takes no inputs and no secrets; a
+caller runs it on `pull_request` and grants nothing (`permissions: {}`).
 
 - The title must be a Conventional Commit subject (`type(scope): description`,
-  optional `!`, no trailing dot) or `Revert "<subject>"`, at most 100 characters.
-- The branch must match `type/<slug>` (or `type/<issue>-<slug>`),
-  `dependabot/...`, or `renovate/...`.
-- A `feat`/`fix` title without a `Closes`/`Fixes`/`Resolves`/`Refs #N`
-  reference in the body emits a warning only.
+  optional `!`, no trailing dot) or `Revert "<subject>"`.
+- Pull requests opened by `dependabot[bot]` or `renovate[bot]` are exempt.
 - An empty title (a non-`pull_request` run) skips validation.
+- Branch names and pull request bodies are not checked.
 
 ## `dependency-review.yml`
 
