@@ -28,5 +28,5 @@ Domain: ../../ai/domains/devops/AGENTS.md (generic rules; this file adds only lo
 
 ## Never
 
-- Never push to `main`, force-push.
+- Never push to `main` or force-push.
 - Never add secrets, bots, GitHub Apps or actions outside the allowlist.

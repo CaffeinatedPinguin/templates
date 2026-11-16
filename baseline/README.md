@@ -10,16 +10,15 @@ collaborators merge changes. Apply it once, then rerun it whenever a repository 
 ## Quick start
 
 1. In `config.env`, set `OWNER` and (optionally) the repository list.
-2. Create `OWNER/.github`, copy `dot-github/` into it, then commit and push.
-3. Preview the settings, then apply them:
+2. Preview the settings, then apply them:
 
    ```bash
    bin/apply.sh --dry-run   # prints every change, including labels it would delete
    bin/apply.sh             # applies the settings through the GitHub API
    ```
 
-4. In every repository, turn on **Collaborators only** under Settings -> Features -> Pull requests.
-5. Copy `repo-files/` into each repository through a pull request (steps in `AGENTS.md`),
+3. In every repository, turn on **Collaborators only** under Settings -> Features -> Pull requests.
+4. Copy `repo-files/` into each repository through a pull request (steps in `AGENTS.md`),
    then fill in `scripts/ci.sh` with the project commands.
 
 ## What is in the kit
@@ -30,8 +29,7 @@ collaborators merge changes. Apply it once, then rerun it whenever a repository 
 | `bin/apply.sh` | configures every repository; `--dry-run` only prints |
 | `ruleset-main.json` | protection for the `main` branch |
 | `labels.tsv` | the only four labels that stay |
-| `dot-github/` | contents of the shared `OWNER/.github` repository |
-| `repo-files/` | files copied into every repository |
+| `repo-files/` | files copied into every repository, including `SECURITY.md`, `CONTRIBUTING.md`, issue forms and the PR template |
 | `bin/pin-actions.sh` | replaces `@LATEST` in workflows with a full commit SHA |
 | `AGENTS.md` | instructions for your AI agent |
 
