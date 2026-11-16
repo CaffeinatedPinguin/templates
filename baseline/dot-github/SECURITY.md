@@ -42,8 +42,7 @@ Please allow time for a fix to be released before any public disclosure.
 ## How this project protects its users
 
 - All changes reach the default branch only through pull requests with required CI checks; force pushes and branch deletion are blocked.
-- Secret scanning with push protection, Dependabot alerts and security updates, and CodeQL code scanning are enabled.
+- Secret scanning with push protection, CodeQL code scanning, and Dependabot (alerts, security updates and dependency version updates) are enabled.
 - GitHub Actions run with a read-only token by default. GitHub-owned actions are allowed, together with a short allowlist of third-party actions and shared workflows from the `templates` repository; every one of them is pinned to a full commit SHA.
 - Pull requests from outside contributors are not accepted and no workflow reacts to issue or comment events, so untrusted input never runs in CI.
-- Dependabot alerts and security updates are enabled; Dependabot handles dependency version updates.
 - Releases are immutable: published tags and assets cannot be changed or replaced.

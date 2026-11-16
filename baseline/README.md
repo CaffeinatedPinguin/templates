@@ -1,4 +1,4 @@
-# gh-baseline (v2, simplified)
+# gh-baseline
 
 One standard for every public repository: safe settings, shared files and simple CI.
 It needs no servers and no background jobs. You only need `gh` (logged in) and `bash`
