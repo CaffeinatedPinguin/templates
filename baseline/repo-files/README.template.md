@@ -40,7 +40,7 @@
 
 ```sh
 git clone https://github.com/OWNER/PROJECT_NAME && cd PROJECT_NAME
-# run lint, typecheck, tests and build the same way CI does
+./scripts/ci.sh   # lint, typecheck, test, build – same as CI
 ```
 
 Conventions (branches, commits, releases): [CONTRIBUTING.md](https://github.com/OWNER/.github/blob/main/CONTRIBUTING.md).
