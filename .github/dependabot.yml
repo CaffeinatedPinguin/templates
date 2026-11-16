@@ -16,5 +16,6 @@ updates:
         update-types: [minor, patch]
     labels: [dependencies]
     commit-message:
-      prefix: ci
+      prefix: chore
+      include: scope
     open-pull-requests-limit: 3
