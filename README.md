@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo-purple.svg" width="96" alt="Smrodek logo"></p>
+
 # GitHub Actions templates
 
 Shared GitHub Actions workflows for this workspace. A project keeps one small caller workflow and
