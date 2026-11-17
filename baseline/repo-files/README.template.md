@@ -3,7 +3,7 @@
 > One sentence: what it does and for whom.
 
 [![ci](https://github.com/OWNER/PROJECT_NAME/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/PROJECT_NAME/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/release/OWNER/PROJECT_NAME)](https://github.com/OWNER/PROJECT_NAME/releases)
+[![version](https://img.shields.io/github/v/release/OWNER/PROJECT_NAME?label=version&sort=semver)](https://github.com/OWNER/PROJECT_NAME/releases/latest)
 [![license](https://img.shields.io/github/license/OWNER/PROJECT_NAME)](LICENSE)
 
 **Status:** actively maintained by one person, best effort. See [Support](#support).
@@ -40,7 +40,7 @@
 
 ```sh
 git clone https://github.com/OWNER/PROJECT_NAME && cd PROJECT_NAME
-./scripts/ci.sh   # lint, typecheck, test, build – same as CI
+./scripts/ci.sh   # lint, typecheck, test, build: same as CI
 ```
 
 Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -51,7 +51,7 @@ Bug reports and feature requests: [open an issue](https://github.com/OWNER/PROJE
 
 ## Security
 
-Report vulnerabilities privately – see [SECURITY.md](SECURITY.md). Do not open public issues for security problems.
+Report vulnerabilities privately. See [SECURITY.md](SECURITY.md). Do not open public issues for security problems.
 
 ## License
 

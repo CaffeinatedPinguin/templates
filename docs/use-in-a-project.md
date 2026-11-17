@@ -1,6 +1,6 @@
 # Use the shared workflows in a project
 
-Read this when: you want to call the shared workflows from a project repository.
+Use this guide when a project calls the shared workflows.
 
 Start from [`examples/caller.yml`](../examples/caller.yml). Copy it to
 `.github/workflows/ci.yml` in your project and replace every `<full-commit-sha>` with one full

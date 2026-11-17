@@ -1,6 +1,6 @@
 # Security principles
 
-Read this when: you add or change a workflow and want the short list of rules.
+These are the rules every workflow change must keep.
 
 The workflow contracts are in [workflows](workflows.md).
 

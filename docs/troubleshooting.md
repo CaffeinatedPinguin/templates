@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Read this when: a workflow run fails and you need the next step.
+Start here when a workflow run fails.
 
 ### `startup_failure` on a run
 

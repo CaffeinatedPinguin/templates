@@ -1,6 +1,6 @@
 # Conventions
 
-Read this when: you write a pull request title, commit message, branch name, or pull request body.
+Use these rules when you write a pull request title, commit message, branch name or pull request body.
 
 ## Pull request title
 

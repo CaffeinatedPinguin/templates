@@ -1,14 +1,18 @@
 # GitHub Actions templates
 
-This repository holds the shared GitHub Actions workflows that our projects reuse. Instead of
-copying CI code into every project, a project keeps one small caller workflow and calls these
-files by a pinned commit. The `baseline/` kit holds the matching repository settings and files.
+Shared GitHub Actions workflows for this workspace. A project keeps one small caller workflow and
+calls these files by a pinned commit, so CI code is not copied into every repository. The
+`baseline/` kit holds the matching repository settings and files.
+
+[![check workflow status](https://github.com/CaffeinatedPinguin/templates/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/CaffeinatedPinguin/templates/actions/workflows/check.yml)
+
+**Status:** internal workflow library. There are no version tags; pin a full commit SHA.
 
 ## Quick start
 
 Copy [`examples/caller.yml`](examples/caller.yml) into your project as
-`.github/workflows/ci.yml`, replace every `<full-commit-sha>` with one full 40-character commit
-SHA, and push.
+`.github/workflows/ci.yml`, replace every `<full-commit-sha>` with one full 40-character commit SHA,
+and push.
 
 ```yaml
 jobs:
@@ -17,12 +21,6 @@ jobs:
     with:
       scripts: test lint typecheck build
 ```
-
-The whole setup is three steps:
-
-1. Copy the example into your project.
-2. Replace `<full-commit-sha>` with a full 40-character commit SHA.
-3. Commit and push; the next pull request runs the shared jobs.
 
 Pin the full SHA so a moved tag cannot swap the code under you. Dependabot keeps the SHA current.
 

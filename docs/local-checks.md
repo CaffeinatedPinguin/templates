@@ -1,6 +1,6 @@
 # Local checks
 
-Read this when: you change a workflow and want to check it before you push.
+Run these checks before you push a workflow change.
 
 The checks run in Docker, so you do not install any tools by hand. The workflows you check are
 described in [workflows](workflows.md). Requirements:
