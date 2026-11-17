@@ -1,6 +1,6 @@
 # Set up a new repository
 
-Read this when: you create a new repository and want the standard settings and files.
+Follow these steps when you create a new repository and want the standard settings and files.
 
 The `baseline/` kit gives a repository the standard settings, labels, and files. The steps below
 go from an empty repository to a first release. Steps 2 to 4 run from the `baseline/` directory;

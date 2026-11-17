@@ -1,6 +1,6 @@
 # Workflows
 
-Read this when: you need to know what a shared workflow does, or which input and output to pass.
+This page lists the shared workflows, their inputs and outputs. Read it before you change one.
 
 This repository has five reusable workflows under `.github/workflows/`. A project calls one with
 `uses:` and a full commit SHA; [use in a project](use-in-a-project.md) shows the caller. Each

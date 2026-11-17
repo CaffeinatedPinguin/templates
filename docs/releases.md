@@ -1,6 +1,6 @@
 # Releases
 
-Read this when: you cut a version tag or want to know what a release produces.
+Read this before you cut a version tag, or when you want to know what a release produces.
 
 ## The tag
 

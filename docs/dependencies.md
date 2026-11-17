@@ -1,6 +1,6 @@
 # Dependencies
 
-Read this when: you manage dependency updates or add a new action.
+Read this before you change dependency settings or add an action.
 
 Dependabot handles every dependency update. There is no second updater to configure. The
 repository settings that switch it on are described in [baseline/README.md](../baseline/README.md).
