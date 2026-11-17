@@ -36,18 +36,9 @@
 |---|---|---|
 | … | … | … |
 
-## Development
-
-```sh
-git clone https://github.com/OWNER/PROJECT_NAME && cd PROJECT_NAME
-./scripts/ci.sh   # lint, typecheck, test, build: same as CI
-```
-
-Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
-
 ## Support
 
-Bug reports and feature requests: [open an issue](https://github.com/OWNER/PROJECT_NAME/issues/new/choose) using a form. Pull requests from outside contributors are not accepted.
+Bug reports and feature requests: [open an issue](https://github.com/OWNER/PROJECT_NAME/issues/new/choose) using a form. Pull requests from outside contributors are not accepted. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
