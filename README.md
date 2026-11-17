@@ -36,7 +36,6 @@ Pin the full SHA so a moved tag cannot swap the code under you. Dependabot keeps
 | [dependencies](docs/dependencies.md) | you manage dependency updates or add an action |
 | [releases](docs/releases.md) | you cut a version tag or publish an image |
 | [conventions](docs/conventions.md) | you write a pull request title or body |
-| [local checks](docs/local-checks.md) | you change a workflow and check it before pushing |
 | [troubleshooting](docs/troubleshooting.md) | a run fails and you need the next step |
 | [security principles](docs/security-principles.md) | you want the short list of rules |
 
@@ -47,5 +46,4 @@ Pin the full SHA so a moved tag cannot swap the code under you. Dependabot keeps
 | `.github/workflows/` | shared workflows: `node-ci.yml`, `docker.yml`, `release.yml`, `conventions.yml`, `dependency-review.yml`, and `check.yml` |
 | `examples/` | `caller.yml`, a complete caller example |
 | `baseline/` | repository settings kit; see [baseline/README.md](baseline/README.md) |
-| `tools/` | `check.sh` and `install-hooks.sh` for local checks |
 | `docs/` | the guides listed above |
