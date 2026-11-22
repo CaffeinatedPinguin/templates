@@ -1,0 +1,205 @@
+name: maven-ci
+
+# Reusable Maven (Java) verification workflow, with an optional pnpm frontend
+# in a subdirectory. A caller pins this file to a full commit SHA and passes
+# project-specific inputs. There is deliberately no pull_request trigger: the
+# repository owner starts a manual run for a PR head through the `ref` input
+# (for example refs/pull/12/head).
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to check out (empty = the event ref).
+        required: false
+        default: ""
+        type: string
+      java-version:
+        description: Java version installed by setup-java.
+        required: false
+        default: "25"
+        type: string
+      java-distribution:
+        description: Java distribution installed by setup-java.
+        required: false
+        default: temurin
+        type: string
+      maven-args:
+        description: Maven arguments passed to ./mvnw, split on whitespace.
+        required: false
+        default: -B -ntp verify
+        type: string
+      frontend-directory:
+        description: Directory with the pnpm frontend (empty = no frontend).
+        required: false
+        default: ""
+        type: string
+      frontend-scripts:
+        description: Space-separated pnpm scripts to run in order.
+        required: false
+        default: lint typecheck test build
+        type: string
+      node-version-file:
+        description: Node version file, relative to the frontend directory.
+        required: false
+        default: .nvmrc
+        type: string
+      artifact-name:
+        description: Name of the uploaded build artifact (empty = no upload).
+        required: false
+        default: ""
+        type: string
+      artifact-path:
+        description: Path of the uploaded build artifact (multi-line allowed).
+        required: false
+        default: ""
+        type: string
+      check-release-tag:
+        description: Validate a release tag against the Maven version on tag builds.
+        required: false
+        default: true
+        type: boolean
+      timeout-minutes:
+        description: Timeout in minutes for the verify job.
+        required: false
+        default: 25
+        type: number
+    outputs:
+      skipped:
+        description: "'true' when the release-tag guard skipped verification."
+        value: ${{ jobs.guard.outputs.skipped }}
+
+permissions: {}
+
+jobs:
+  # Cheap race guard: on a push to main a stable release tag may already point
+  # at this commit. The release pipeline is authoritative in that case, so the
+  # expensive verification is skipped. Full history is required to see tags.
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      skipped: ${{ steps.check.outputs.skipped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Skip when a stable release tag points at this commit
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          skipped=false
+          if [[ "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/main" ]]; then
+            tag="$(git tag --points-at "$GITHUB_SHA" --list 'v*' --sort=-version:refname \
+              | sed -n -E '/^v[0-9]+\.[0-9]+\.[0-9]+$/ {p;q;}')"
+            if [[ -n "$tag" ]]; then
+              echo "Stable release tag ${tag} already points at ${GITHUB_SHA}; the release pipeline is authoritative. Skipping."
+              skipped=true
+            fi
+          fi
+          echo "skipped=${skipped}" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: verify
+    needs: guard
+    if: needs.guard.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Java
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+          # A manual PR run checks out untrusted code. Disable the Maven cache
+          # so such a run can never write a cache entry that trusted main/tag
+          # builds would later restore (cache poisoning).
+          cache: ${{ inputs.ref == '' && 'maven' || '' }}
+
+      - name: Validate release tag against the Maven version
+        if: inputs.check-release-tag && github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(./mvnw -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          expected="v${version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected}" ]]; then
+            echo "::error::release tag ${GITHUB_REF_NAME} does not match the Maven version ${version} (expected ${expected})"
+            exit 1
+          fi
+
+      - name: Run Maven
+        shell: bash
+        env:
+          MAVEN_ARGS: ${{ inputs.maven-args }}
+        run: |
+          set -euo pipefail
+          read -r -a args <<< "$MAVEN_ARGS" || true
+          ./mvnw "${args[@]}"
+
+      # The frontend steps below are skipped by their `if` when the project
+      # keeps no pnpm frontend in a subdirectory.
+      - name: Set up pnpm
+        if: inputs.frontend-directory != ''
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          # Disable the store cache for a manual PR run for the same reason as
+          # the Maven cache above.
+          cache: ${{ inputs.ref == '' }}
+          package_json_file: ${{ inputs.frontend-directory }}/package.json
+          cache_dependency_path: ${{ inputs.frontend-directory }}/pnpm-lock.yaml
+
+      - name: Set up Node
+        if: inputs.frontend-directory != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # setup-node may auto-enable an npm cache; keep it off because the
+          # pnpm store cache is managed by pnpm/action-setup above.
+          node-version-file: ${{ inputs.frontend-directory }}/${{ inputs.node-version-file }}
+          package-manager-cache: false
+
+      - name: Install frontend dependencies
+        if: inputs.frontend-directory != ''
+        shell: bash
+        working-directory: ${{ inputs.frontend-directory }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Run frontend scripts
+        if: inputs.frontend-directory != ''
+        shell: bash
+        working-directory: ${{ inputs.frontend-directory }}
+        env:
+          FRONTEND_SCRIPTS: ${{ inputs.frontend-scripts }}
+        run: |
+          set -euo pipefail
+          read -r -a scripts <<< "$FRONTEND_SCRIPTS" || true
+          for script in "${scripts[@]}"; do
+            echo "::group::pnpm ${script}"
+            pnpm "${script}"
+            echo "::endgroup::"
+          done
+
+      - name: Upload build artifact
+        # An empty name means the project has no build artifact to publish.
+        if: inputs.artifact-name != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 1
