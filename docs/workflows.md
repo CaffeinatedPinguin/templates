@@ -23,8 +23,10 @@ build only when its group is in the list. The workflow uses only `actions/checko
 | `groups` | JSON array of the group names to build, for example `["server","frontend"]` or `[]`. |
 
 A pattern is matched by the shell glob `[[ "$file" == $pattern ]]`, so `*` also matches `/` (a
-`frontend/*` pattern covers `frontend/src/app.ts`). Group lines are validated before any git
-command: a missing `:` or a name outside `^[a-z0-9-]+$` fails the job with `::error::`.
+`frontend/*` pattern covers `frontend/src/app.ts`). A moved file counts for both its old and its new
+path, and file names with non-ASCII characters or spaces are matched as they are. Group lines are
+validated before any git command: a missing `:` or a name outside `^[a-z0-9-]+$` fails the job with
+`::error::`.
 
 The detection is fail-safe. Every event other than `pull_request` (a push, a tag, a manual run)
 returns all groups. For a pull request the changed files come from `git diff --name-only HEAD^1

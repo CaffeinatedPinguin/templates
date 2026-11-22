@@ -52,100 +52,61 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Parse and validate the group specification first, so a typo fails
-          # the run before any git command.
-          names=()
-          specs=()
+          # Parse and validate every group line before any git command, so a
+          # typo fails the run early.
+          names=() specs=()
           while IFS= read -r line; do
-            if [[ -z "$line" ]]; then
-              continue
-            fi
-            if [[ "$line" != *:* ]]; then
-              echo "::error::groups line without ':': ${line}"
-              exit 1
-            fi
+            [[ -z "$line" ]] && continue
+            [[ "$line" == *:* ]] || { echo "::error::groups line without ':': ${line}"; exit 1; }
             name="${line%%:*}"
-            if [[ ! "$name" =~ ^[a-z0-9-]+$ ]]; then
-              echo "::error::invalid group name: ${name}"
-              exit 1
-            fi
+            [[ "$name" =~ ^[a-z0-9-]+$ ]] || { echo "::error::invalid group name: ${name}"; exit 1; }
             names+=("$name")
             specs+=("${line#*:}")
           done <<< "$GROUP_SPEC"
 
-          emit_all() {
-            local json="" name
-            for name in "${names[@]}"; do
-              if [[ -n "$json" ]]; then
-                json="${json},"
-              fi
-              json="${json}\"${name}\""
-            done
-            echo "groups=[${json}]" >> "$GITHUB_OUTPUT"
-            echo "Changed groups: [${json}]"
-          }
-
-          # Every event other than a pull request (push to main, tag, manual
-          # run) builds everything.
-          if [[ "${EVENT_NAME}" != "pull_request" ]]; then
-            echo "Event '${EVENT_NAME}' is not pull_request; building every group."
-            emit_all
-            exit 0
-          fi
-
-          # A pull request checkout is a merge commit; its first parent is the
-          # base branch. If the diff cannot be computed, build everything
-          # (fail safe) instead of silently skipping jobs.
-          if ! changed="$(git diff --name-only HEAD^1 HEAD)"; then
-            echo "::warning::cannot diff HEAD^1..HEAD; building every group"
-            emit_all
-            exit 0
-          fi
-
-          read -r -a always_patterns <<< "$ALWAYS"
-
-          selected=()
-          for idx in "${!names[@]}"; do
-            selected[idx]=false
-          done
-
-          while IFS= read -r file; do
-            if [[ -z "$file" ]]; then
-              continue
-            fi
-            for pattern in "${always_patterns[@]}"; do
+          # One small glob matcher shared by the always and group patterns.
+          matches() {
+            local f="$1" p; shift
+            for p in "$@"; do
               # The pattern is a glob on purpose: the star also matches '/'.
               # shellcheck disable=SC2053
-              if [[ "$file" == $pattern ]]; then
-                echo "File '${file}' matches always pattern '${pattern}'; building every group."
-                emit_all
-                exit 0
-              fi
+              [[ "$f" == $p ]] && return 0
             done
+            return 1
+          }
+
+          # Build everything unless a pull request diff tells us otherwise.
+          all=false changed=()
+          [[ "$EVENT_NAME" == "pull_request" ]] || all=true
+          if [[ "$all" == false ]]; then
+            file=$(mktemp)
+            if ! git -c core.quotePath=false diff --name-only --no-renames -z HEAD^1 HEAD > "$file"; then
+              echo "::warning::cannot diff HEAD^1..HEAD; building every group"
+              all=true
+            fi
+            mapfile -d '' changed < "$file"; rm -f "$file"
+          fi
+
+          # Select matching groups in one pass over the changed files.
+          read -r -a always_patterns <<< "$ALWAYS"
+          selected=(); for idx in "${!names[@]}"; do selected[idx]=false; done
+          for f in "${changed[@]}"; do
+            [[ -z "$f" ]] && continue
+            if matches "$f" "${always_patterns[@]}"; then
+              echo "File '${f}' matches an always pattern; building every group."
+              all=true
+              break
+            fi
             for idx in "${!names[@]}"; do
               read -r -a group_patterns <<< "${specs[idx]}"
-              for pattern in "${group_patterns[@]}"; do
-                # shellcheck disable=SC2053
-                if [[ "$file" == $pattern ]]; then
-                  selected[idx]=true
-                fi
-              done
+              matches "$f" "${group_patterns[@]}" && selected[idx]=true
             done
-          done <<< "$changed"
-
-          result=()
-          for idx in "${!names[@]}"; do
-            if [[ "${selected[idx]}" == "true" ]]; then
-              result+=("${names[idx]}")
-            fi
           done
 
+          # Emit the JSON exactly once.
           json=""
-          for name in "${result[@]}"; do
-            if [[ -n "$json" ]]; then
-              json="${json},"
-            fi
-            json="${json}\"${name}\""
+          for idx in "${!names[@]}"; do
+            [[ "$all" == true || "${selected[idx]}" == true ]] && json="${json:+$json,}\"${names[idx]}\""
           done
           echo "groups=[${json}]" >> "$GITHUB_OUTPUT"
           echo "Changed groups: [${json}]"
