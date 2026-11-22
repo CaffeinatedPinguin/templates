@@ -43,7 +43,7 @@ Pin the full SHA so a moved tag cannot swap the code under you. Dependabot keeps
 
 | Path | What it is |
 |---|---|
-| `.github/workflows/` | shared workflows: `node-ci.yml`, `maven-ci.yml`, `docker.yml`, `release.yml`, `conventions.yml`, `dependency-review.yml`, and `check.yml` |
+| `.github/workflows/` | shared workflows: `changes.yml`, `node-ci.yml`, `maven-ci.yml`, `docker.yml`, `release.yml`, `conventions.yml`, `dependency-review.yml`, and `check.yml` |
 | `examples/` | `caller.yml`, a complete caller example |
 | `baseline/` | repository settings kit; see [baseline/README.md](baseline/README.md) |
 | `docs/` | the guides listed above |

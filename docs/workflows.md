@@ -2,10 +2,45 @@
 
 This page lists the shared workflows, their inputs and outputs. Read it before you change one.
 
-This repository has six reusable workflows under `.github/workflows/`. A project calls one with
+This repository has seven reusable workflows under `.github/workflows/`. A project calls one with
 `uses:` and a full commit SHA; [use in a project](use-in-a-project.md) shows the caller. Each
 section below lists the inputs with their defaults and the outputs. The file `check.yml` is not
 reusable: it runs `tools/check.sh` on this repository.
+
+## `changes.yml`
+
+Reports which groups of a project a pull request touches, so a caller can gate its expensive jobs
+on the JSON list. A project with a backend and a frontend passes one line per group and runs each
+build only when its group is in the list. The workflow uses only `actions/checkout` and git.
+
+| Input | Default | What it does |
+|---|---|---|
+| `groups` | required | Lines of `name: pattern pattern...`; `name` must match `^[a-z0-9-]+$`, and the output keeps the input order. |
+| `always` | `.github/* scripts/*` | Space-separated patterns; a changed file that matches one of them switches every group on. |
+
+| Output | What it does |
+|---|---|
+| `groups` | JSON array of the group names to build, for example `["server","frontend"]` or `[]`. |
+
+A pattern is matched by the shell glob `[[ "$file" == $pattern ]]`, so `*` also matches `/` (a
+`frontend/*` pattern covers `frontend/src/app.ts`). Group lines are validated before any git
+command: a missing `:` or a name outside `^[a-z0-9-]+$` fails the job with `::error::`.
+
+The detection is fail-safe. Every event other than `pull_request` (a push, a tag, a manual run)
+returns all groups. For a pull request the changed files come from `git diff --name-only HEAD^1
+HEAD`: the checkout is the merge commit and its first parent is the base branch. If that diff
+cannot be computed, the workflow emits a `::warning::` and returns all groups, so a broken diff
+never hides a build.
+
+```yaml
+jobs:
+  changes:
+    uses: CaffeinatedPinguin/templates/.github/workflows/changes.yml@<full-commit-sha>
+    with:
+      groups: |
+        server: server/* pom.xml mvnw .mvn/* config/*
+        frontend: frontend/*
+```
 
 ## `node-ci.yml`
 
@@ -72,19 +107,32 @@ directory through `working-directory`.
 |---|---|
 | `skipped` | `'true'` when a stable release tag already points at the pushed commit, so the expensive jobs are not repeated. |
 
-A project with the Maven Wrapper at the root and a pnpm app in `frontend/` calls both workflows
-and lets `ci-required` wait for each job; the gate below is the branch-protection check described
-in [use in a project](use-in-a-project.md#the-ci-required-job):
+A project with the Maven Wrapper at the root and a pnpm app in `frontend/` calls `changes.yml`
+first and gates both builds on its output, so a pull request that touches only one side runs only
+that job. `ci-required` waits for every job; a skipped job is fine, a failed `changes` job stays
+red. The gate below is the branch-protection check described in
+[use in a project](use-in-a-project.md#the-ci-required-job):
 
 ```yaml
 jobs:
+  changes:
+    uses: CaffeinatedPinguin/templates/.github/workflows/changes.yml@<full-commit-sha>
+    with:
+      groups: |
+        server: server/* pom.xml mvnw .mvn/* config/*
+        frontend: frontend/*
+
   verify:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.groups), 'server')
     uses: CaffeinatedPinguin/templates/.github/workflows/maven-ci.yml@<full-commit-sha>
     with:
       java-version: "25"
       maven-args: -B -ntp verify
 
   frontend:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.groups), 'frontend')
     uses: CaffeinatedPinguin/templates/.github/workflows/node-ci.yml@<full-commit-sha>
     with:
       working-directory: frontend
@@ -92,7 +140,7 @@ jobs:
 
   ci-required:
     if: always()
-    needs: [verify, frontend]
+    needs: [changes, verify, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions: {}
