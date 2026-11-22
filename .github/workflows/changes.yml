@@ -1,0 +1,112 @@
+name: changes
+
+# Reusable change detector. A project passes named groups and the file
+# patterns that belong to each group; the workflow reports which groups a
+# pull request touches. The caller gates its expensive jobs on the JSON list
+# in the `groups` output. Only `actions/checkout` and git are used.
+on:
+  workflow_call:
+    inputs:
+      groups:
+        description: "Groups as lines of `name: pattern pattern...`."
+        required: true
+        type: string
+      always:
+        description: "Patterns that switch every group on (space separated)."
+        required: false
+        default: .github/* scripts/*
+        type: string
+    outputs:
+      groups:
+        description: "JSON array of the group names to build, in input order."
+        value: ${{ jobs.changes.outputs.groups }}
+
+permissions: {}
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      groups: ${{ steps.detect.outputs.groups }}
+    steps:
+      # The checkout of a pull request is the merge commit, so its first
+      # parent is the base branch. Two commits of history are enough to diff
+      # that merge commit against the base.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Detect changed groups
+        id: detect
+        shell: bash
+        env:
+          GROUP_SPEC: ${{ inputs.groups }}
+          ALWAYS: ${{ inputs.always }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          # Parse and validate every group line before any git command, so a
+          # typo fails the run early.
+          names=() specs=()
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            [[ "$line" == *:* ]] || { echo "::error::groups line without ':': ${line}"; exit 1; }
+            name="${line%%:*}"
+            [[ "$name" =~ ^[a-z0-9-]+$ ]] || { echo "::error::invalid group name: ${name}"; exit 1; }
+            names+=("$name")
+            specs+=("${line#*:}")
+          done <<< "$GROUP_SPEC"
+
+          # One small glob matcher shared by the always and group patterns.
+          matches() {
+            local f="$1" p; shift
+            for p in "$@"; do
+              # The pattern is a glob on purpose: the star also matches '/'.
+              # shellcheck disable=SC2053
+              [[ "$f" == $p ]] && return 0
+            done
+            return 1
+          }
+
+          # Build everything unless a pull request diff tells us otherwise.
+          all=false changed=()
+          [[ "$EVENT_NAME" == "pull_request" ]] || all=true
+          if [[ "$all" == false ]]; then
+            file=$(mktemp)
+            if ! git -c core.quotePath=false diff --name-only --no-renames -z HEAD^1 HEAD > "$file"; then
+              echo "::warning::cannot diff HEAD^1..HEAD; building every group"
+              all=true
+            fi
+            mapfile -d '' changed < "$file"; rm -f "$file"
+          fi
+
+          # Select matching groups in one pass over the changed files.
+          read -r -a always_patterns <<< "$ALWAYS"
+          selected=(); for idx in "${!names[@]}"; do selected[idx]=false; done
+          for f in "${changed[@]}"; do
+            [[ -z "$f" ]] && continue
+            if matches "$f" "${always_patterns[@]}"; then
+              echo "File '${f}' matches an always pattern; building every group."
+              all=true
+              break
+            fi
+            for idx in "${!names[@]}"; do
+              read -r -a group_patterns <<< "${specs[idx]}"
+              matches "$f" "${group_patterns[@]}" && selected[idx]=true
+            done
+          done
+
+          # Emit the JSON exactly once.
+          json=""
+          for idx in "${!names[@]}"; do
+            [[ "$all" == true || "${selected[idx]}" == true ]] && json="${json:+$json,}\"${names[idx]}\""
+          done
+          echo "groups=[${json}]" >> "$GITHUB_OUTPUT"
+          echo "Changed groups: [${json}]"

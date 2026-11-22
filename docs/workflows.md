@@ -2,10 +2,47 @@
 
 This page lists the shared workflows, their inputs and outputs. Read it before you change one.
 
-This repository has five reusable workflows under `.github/workflows/`. A project calls one with
+This repository has seven reusable workflows under `.github/workflows/`. A project calls one with
 `uses:` and a full commit SHA; [use in a project](use-in-a-project.md) shows the caller. Each
 section below lists the inputs with their defaults and the outputs. The file `check.yml` is not
 reusable: it runs `tools/check.sh` on this repository.
+
+## `changes.yml`
+
+Reports which groups of a project a pull request touches, so a caller can gate its expensive jobs
+on the JSON list. A project with a backend and a frontend passes one line per group and runs each
+build only when its group is in the list. The workflow uses only `actions/checkout` and git.
+
+| Input | Default | What it does |
+|---|---|---|
+| `groups` | required | Lines of `name: pattern pattern...`; `name` must match `^[a-z0-9-]+$`, and the output keeps the input order. |
+| `always` | `.github/* scripts/*` | Space-separated patterns; a changed file that matches one of them switches every group on. |
+
+| Output | What it does |
+|---|---|
+| `groups` | JSON array of the group names to build, for example `["server","frontend"]` or `[]`. |
+
+A pattern is matched by the shell glob `[[ "$file" == $pattern ]]`, so `*` also matches `/` (a
+`frontend/*` pattern covers `frontend/src/app.ts`). A moved file counts for both its old and its new
+path, and file names with non-ASCII characters or spaces are matched as they are. Group lines are
+validated before any git command: a missing `:` or a name outside `^[a-z0-9-]+$` fails the job with
+`::error::`.
+
+The detection is fail-safe. Every event other than `pull_request` (a push, a tag, a manual run)
+returns all groups. For a pull request the changed files come from `git diff --name-only HEAD^1
+HEAD`: the checkout is the merge commit and its first parent is the base branch. If that diff
+cannot be computed, the workflow emits a `::warning::` and returns all groups, so a broken diff
+never hides a build.
+
+```yaml
+jobs:
+  changes:
+    uses: CaffeinatedPinguin/templates/.github/workflows/changes.yml@<full-commit-sha>
+    with:
+      groups: |
+        server: server/* pom.xml mvnw .mvn/* config/*
+        frontend: frontend/*
+```
 
 ## `node-ci.yml`
 
@@ -17,7 +54,8 @@ commit.
 |---|---|---|
 | `ref` | empty | Ref to check out, for example `refs/pull/<n>/head` to verify a pull request head. |
 | `scripts` | `test lint typecheck build` | Space-separated `pnpm <script>` commands run in order. |
-| `node-version-file` | `.nvmrc` | File read by `actions/setup-node`; pnpm comes from `packageManager`. |
+| `node-version-file` | `.nvmrc` | File read by `actions/setup-node`, resolved inside `working-directory`; pnpm comes from `packageManager`. |
+| `working-directory` | `.` | Directory that holds `package.json` and the pnpm lockfile; `install`, the tag check and the scripts run there. |
 | `runs-on` | `ubuntu-latest` | GitHub-hosted runner label (`ubuntu-*`, `windows-*`, `macos-*`); other labels are rejected. |
 | `artifact-name` | `dist` | Uploaded artifact name; an empty value skips the upload. |
 | `artifact-path` | `dist` | Path to upload; multi-line values are allowed. |
@@ -28,6 +66,10 @@ commit.
 | Output | What it does |
 |---|---|
 | `skipped` | `'true'` when a stable release tag already points at the pushed commit, so the expensive jobs are not repeated. |
+
+`artifact-path` and `assets-path` are resolved from the repository root, not from
+`working-directory`, so a project whose app lives in a subdirectory passes the prefix itself (for
+example `frontend/dist`).
 
 To verify several operating systems, call the workflow once per matrix entry and give every
 variant a unique artifact name (or an empty one) so the uploads do not collide:
@@ -42,6 +84,76 @@ jobs:
     with:
       runs-on: ${{ matrix.os }}
       artifact-name: dist-${{ matrix.os }}
+```
+
+## `maven-ci.yml`
+
+Runs a Maven build through the project's Maven Wrapper. A cheap guard skips the expensive jobs
+when a release tag already points at this commit. The `ubuntu-latest` runner has Docker, so tests
+that use Testcontainers work without extra setup. This workflow builds the Maven project only; a
+project that also has a Node/pnpm app calls `node-ci.yml` in a separate job, pointed at the app
+directory through `working-directory`.
+
+| Input | Default | What it does |
+|---|---|---|
+| `ref` | empty | Ref to check out, for example `refs/pull/<n>/head` to verify a pull request head. |
+| `java-version` | `25` | Java version installed by `actions/setup-java`. |
+| `java-distribution` | `temurin` | Java distribution installed by `actions/setup-java`. |
+| `maven-args` | `-B -ntp verify` | Arguments passed to `./mvnw`; they are split on whitespace. |
+| `artifact-name` | empty | Uploaded artifact name; an empty value skips the upload. |
+| `artifact-path` | empty | Path to upload; multi-line values are allowed. |
+| `check-release-tag` | `true` | On a tag, require it to equal `v` plus the Maven project version. |
+| `timeout-minutes` | `25` | Timeout of the `verify` job. |
+
+| Output | What it does |
+|---|---|
+| `skipped` | `'true'` when a stable release tag already points at the pushed commit, so the expensive jobs are not repeated. |
+
+A project with the Maven Wrapper at the root and a pnpm app in `frontend/` calls `changes.yml`
+first and gates both builds on its output, so a pull request that touches only one side runs only
+that job. `ci-required` waits for every job; a skipped job is fine, a failed `changes` job stays
+red. The gate below is the branch-protection check described in
+[use in a project](use-in-a-project.md#the-ci-required-job):
+
+```yaml
+jobs:
+  changes:
+    uses: CaffeinatedPinguin/templates/.github/workflows/changes.yml@<full-commit-sha>
+    with:
+      groups: |
+        server: server/* pom.xml mvnw .mvn/* config/*
+        frontend: frontend/*
+
+  verify:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.groups), 'server')
+    uses: CaffeinatedPinguin/templates/.github/workflows/maven-ci.yml@<full-commit-sha>
+    with:
+      java-version: "25"
+      maven-args: -B -ntp verify
+
+  frontend:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.groups), 'frontend')
+    uses: CaffeinatedPinguin/templates/.github/workflows/node-ci.yml@<full-commit-sha>
+    with:
+      working-directory: frontend
+      artifact-path: frontend/dist
+
+  ci-required:
+    if: always()
+    needs: [changes, verify, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: All jobs green
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            [[ "$r" == success || "$r" == skipped ]] || { echo "::error::job result: $r"; exit 1; }
+          done
 ```
 
 ## `docker.yml`

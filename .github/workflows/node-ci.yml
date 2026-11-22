@@ -22,6 +22,11 @@ on:
         required: false
         default: .nvmrc
         type: string
+      working-directory:
+        description: Directory with package.json and the pnpm lockfile.
+        required: false
+        default: "."
+        type: string
       runs-on:
         description: GitHub-hosted runner label for the verify job.
         required: false
@@ -133,19 +138,25 @@ jobs:
           # such a run can never write a cache entry that trusted main/tag
           # builds would later restore (cache poisoning).
           cache: ${{ inputs.ref == '' }}
+          # Keep pnpm in the project directory: read `packageManager` from its
+          # package.json and hash its lockfile for the store cache key.
+          package_json_file: ${{ inputs.working-directory }}/package.json
+          cache_dependency_path: ${{ inputs.working-directory }}/pnpm-lock.yaml
 
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: ${{ inputs.node-version-file }}
+          node-version-file: ${{ inputs.working-directory }}/${{ inputs.node-version-file }}
 
       - name: Install dependencies
         shell: bash
+        working-directory: ${{ inputs.working-directory }}
         run: pnpm install --frozen-lockfile
 
       - name: Validate release tag against package.json
         if: inputs.check-release-tag && github.ref_type == 'tag'
         shell: bash
+        working-directory: ${{ inputs.working-directory }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
@@ -157,6 +168,7 @@ jobs:
 
       - name: Run package scripts
         shell: bash
+        working-directory: ${{ inputs.working-directory }}
         env:
           SCRIPTS: ${{ inputs.scripts }}
         run: |
@@ -171,6 +183,8 @@ jobs:
       - name: Upload build artifact
         # An empty name means the project has no build artifact to publish;
         # it also keeps matrix variants from colliding on one artifact name.
+        # `artifact-path` is resolved from the repository root, not from
+        # `working-directory`, so a subdirectory project passes a prefixed path.
         if: inputs.artifact-name != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -181,6 +195,7 @@ jobs:
 
       # Optional second artifact, kept apart from the build artifact so the
       # Docker build layout stays intact; release.yml downloads it by name.
+      # Its path is resolved from the repository root as well.
       - name: Upload release assets
         if: inputs.assets-name != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
