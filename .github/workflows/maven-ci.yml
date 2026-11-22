@@ -1,10 +1,12 @@
 name: maven-ci
 
-# Reusable Maven (Java) verification workflow, with an optional pnpm frontend
-# in a subdirectory. A caller pins this file to a full commit SHA and passes
-# project-specific inputs. There is deliberately no pull_request trigger: the
-# repository owner starts a manual run for a PR head through the `ref` input
-# (for example refs/pull/12/head).
+# Reusable Maven (Java) verification workflow. It builds the Maven project
+# only; a project that also has a Node/pnpm app in a subdirectory calls
+# node-ci.yml next to this workflow and points its `working-directory` there.
+# A caller pins this file to a full commit SHA and passes project-specific
+# inputs. There is deliberately no pull_request trigger: the repository owner
+# starts a manual run for a PR head through the `ref` input (for example
+# refs/pull/12/head).
 on:
   workflow_call:
     inputs:
@@ -27,21 +29,6 @@ on:
         description: Maven arguments passed to ./mvnw, split on whitespace.
         required: false
         default: -B -ntp verify
-        type: string
-      frontend-directory:
-        description: Directory with the pnpm frontend (empty = no frontend).
-        required: false
-        default: ""
-        type: string
-      frontend-scripts:
-        description: Space-separated pnpm scripts to run in order.
-        required: false
-        default: lint typecheck test build
-        type: string
-      node-version-file:
-        description: Node version file, relative to the frontend directory.
-        required: false
-        default: .nvmrc
         type: string
       artifact-name:
         description: Name of the uploaded build artifact (empty = no upload).
@@ -152,48 +139,7 @@ jobs:
           read -r -a args <<< "$MAVEN_ARGS" || true
           ./mvnw "${args[@]}"
 
-      # The frontend steps below are skipped by their `if` when the project
-      # keeps no pnpm frontend in a subdirectory.
-      - name: Set up pnpm
-        if: inputs.frontend-directory != ''
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-        with:
-          # Disable the store cache for a manual PR run for the same reason as
-          # the Maven cache above.
-          cache: ${{ inputs.ref == '' }}
-          package_json_file: ${{ inputs.frontend-directory }}/package.json
-          cache_dependency_path: ${{ inputs.frontend-directory }}/pnpm-lock.yaml
-
-      - name: Set up Node
-        if: inputs.frontend-directory != ''
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          # setup-node may auto-enable an npm cache; keep it off because the
-          # pnpm store cache is managed by pnpm/action-setup above.
-          node-version-file: ${{ inputs.frontend-directory }}/${{ inputs.node-version-file }}
-          package-manager-cache: false
-
-      - name: Install frontend dependencies
-        if: inputs.frontend-directory != ''
-        shell: bash
-        working-directory: ${{ inputs.frontend-directory }}
-        run: pnpm install --frozen-lockfile
-
-      - name: Run frontend scripts
-        if: inputs.frontend-directory != ''
-        shell: bash
-        working-directory: ${{ inputs.frontend-directory }}
-        env:
-          FRONTEND_SCRIPTS: ${{ inputs.frontend-scripts }}
-        run: |
-          set -euo pipefail
-          read -r -a scripts <<< "$FRONTEND_SCRIPTS" || true
-          for script in "${scripts[@]}"; do
-            echo "::group::pnpm ${script}"
-            pnpm "${script}"
-            echo "::endgroup::"
-          done
-
+      # The frontend of a project lives in its own workflow; see node-ci.yml.
       - name: Upload build artifact
         # An empty name means the project has no build artifact to publish.
         if: inputs.artifact-name != ''

@@ -17,7 +17,8 @@ commit.
 |---|---|---|
 | `ref` | empty | Ref to check out, for example `refs/pull/<n>/head` to verify a pull request head. |
 | `scripts` | `test lint typecheck build` | Space-separated `pnpm <script>` commands run in order. |
-| `node-version-file` | `.nvmrc` | File read by `actions/setup-node`; pnpm comes from `packageManager`. |
+| `node-version-file` | `.nvmrc` | File read by `actions/setup-node`, resolved inside `working-directory`; pnpm comes from `packageManager`. |
+| `working-directory` | `.` | Directory that holds `package.json` and the pnpm lockfile; `install`, the tag check and the scripts run there. |
 | `runs-on` | `ubuntu-latest` | GitHub-hosted runner label (`ubuntu-*`, `windows-*`, `macos-*`); other labels are rejected. |
 | `artifact-name` | `dist` | Uploaded artifact name; an empty value skips the upload. |
 | `artifact-path` | `dist` | Path to upload; multi-line values are allowed. |
@@ -28,6 +29,10 @@ commit.
 | Output | What it does |
 |---|---|
 | `skipped` | `'true'` when a stable release tag already points at the pushed commit, so the expensive jobs are not repeated. |
+
+`artifact-path` and `assets-path` are resolved from the repository root, not from
+`working-directory`, so a project whose app lives in a subdirectory passes the prefix itself (for
+example `frontend/dist`).
 
 To verify several operating systems, call the workflow once per matrix entry and give every
 variant a unique artifact name (or an empty one) so the uploads do not collide:
@@ -46,10 +51,11 @@ jobs:
 
 ## `maven-ci.yml`
 
-Runs a Maven build through the project's Maven Wrapper and, when the project keeps a pnpm
-frontend in a subdirectory, installs it and runs the requested `pnpm` scripts. A cheap guard
-skips the expensive jobs when a release tag already points at this commit. The `ubuntu-latest`
-runner has Docker, so tests that use Testcontainers work without extra setup.
+Runs a Maven build through the project's Maven Wrapper. A cheap guard skips the expensive jobs
+when a release tag already points at this commit. The `ubuntu-latest` runner has Docker, so tests
+that use Testcontainers work without extra setup. This workflow builds the Maven project only; a
+project that also has a Node/pnpm app calls `node-ci.yml` in a separate job, pointed at the app
+directory through `working-directory`.
 
 | Input | Default | What it does |
 |---|---|---|
@@ -57,9 +63,6 @@ runner has Docker, so tests that use Testcontainers work without extra setup.
 | `java-version` | `25` | Java version installed by `actions/setup-java`. |
 | `java-distribution` | `temurin` | Java distribution installed by `actions/setup-java`. |
 | `maven-args` | `-B -ntp verify` | Arguments passed to `./mvnw`; they are split on whitespace. |
-| `frontend-directory` | empty | Directory with the pnpm frontend; an empty value skips every frontend step. |
-| `frontend-scripts` | `lint typecheck test build` | Space-separated `pnpm <script>` commands run in order. |
-| `node-version-file` | `.nvmrc` | Node version file, resolved inside `frontend-directory`. |
 | `artifact-name` | empty | Uploaded artifact name; an empty value skips the upload. |
 | `artifact-path` | empty | Path to upload; multi-line values are allowed. |
 | `check-release-tag` | `true` | On a tag, require it to equal `v` plus the Maven project version. |
@@ -69,9 +72,9 @@ runner has Docker, so tests that use Testcontainers work without extra setup.
 |---|---|
 | `skipped` | `'true'` when a stable release tag already points at the pushed commit, so the expensive jobs are not repeated. |
 
-A project with the Maven Wrapper at the root and a pnpm frontend in `frontend/` calls it like
-this; the `ci-required` job below is the branch-protection gate described in
-[use in a project](use-in-a-project.md#the-ci-required-job):
+A project with the Maven Wrapper at the root and a pnpm app in `frontend/` calls both workflows
+and lets `ci-required` wait for each job; the gate below is the branch-protection check described
+in [use in a project](use-in-a-project.md#the-ci-required-job):
 
 ```yaml
 jobs:
@@ -80,11 +83,16 @@ jobs:
     with:
       java-version: "25"
       maven-args: -B -ntp verify
-      frontend-directory: frontend
+
+  frontend:
+    uses: CaffeinatedPinguin/templates/.github/workflows/node-ci.yml@<full-commit-sha>
+    with:
+      working-directory: frontend
+      artifact-path: frontend/dist
 
   ci-required:
     if: always()
-    needs: [verify]
+    needs: [verify, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions: {}
